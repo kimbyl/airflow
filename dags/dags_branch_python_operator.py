@@ -2,7 +2,7 @@ import pendulum
 
 from airflow.models.dag import DAG
 from airflow.operators.python import PythonOperator
-from airflow.operators.branch import BranchPythonOperator
+from airflow.operators.python import BranchPythonOperator
 
 with DAG(
     dag_id="dags_branch_python_operator",
@@ -50,4 +50,5 @@ with DAG(
     )
 
     python_branch_task >> [task_a, task_b, task_c]
+    
     
