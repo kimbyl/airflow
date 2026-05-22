@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>내 사진 업로드</title>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --accent: #4f46e5;
+      --accent-dark: #4338ca;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #d1d5db;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Noto Sans KR", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .card {
+      width: min(760px, 100%);
+      background: var(--card);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      padding: 28px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(1.4rem, 2vw, 2rem);
+    }
+
+    p {
+      margin: 0 0 20px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .upload {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      background: #fafbff;
+      transition: border-color 0.2s ease;
+    }
+
+    .upload.dragover { border-color: var(--accent); }
+
+    input[type="file"] { display: none; }
+
+    .btn {
+      display: inline-block;
+      margin-top: 10px;
+      background: var(--accent);
+      color: #fff;
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn:hover { background: var(--accent-dark); }
+
+    .hint {
+      margin-top: 10px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .gallery-header {
+      margin-top: 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .gallery-header h2 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+
+    .sub-actions { display: flex; gap: 8px; }
+
+    .sub-btn {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .list-wrap {
+      margin-top: 10px;
+      max-height: 480px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      background: #fafbff;
+    }
+
+    .empty {
+      margin: 0;
+      color: var(--muted);
+      text-align: center;
+      padding: 18px 0;
+    }
+
+    .photo-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 12px;
+    }
+
+    .item {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+    }
+
+    .item img {
+      width: 100%;
+      max-height: 320px;
+      object-fit: contain;
+      border-radius: 8px;
+      background: #f9fafb;
+    }
+
+    .meta {
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>📸 내 사진 올리는 홈페이지</h1>
+    <p>여러 장을 업로드하면 저장되고, 아래 리스트에서 스크롤을 내려 다음 이미지를 계속 볼 수 있어요.</p>
+
+    <section class="upload" id="dropzone">
+      <strong>사진을 여기에 놓거나 여러 장 선택하세요</strong><br />
+      <label class="btn" for="photoInput">사진 선택하기</label>
+      <input id="photoInput" type="file" accept="image/*" multiple />
+      <div class="hint">업로드한 이미지는 브라우저(LocalStorage)에 저장됩니다.</div>
+    </section>
+
+    <section class="gallery-header">
+      <h2>저장된 사진 리스트</h2>
+      <div class="sub-actions">
+        <button id="clearAll" class="sub-btn" type="button">전체 삭제</button>
+      </div>
+    </section>
+
+    <section class="list-wrap" id="listWrap" aria-label="사진 리스트">
+      <p class="empty" id="emptyText">아직 저장된 사진이 없어요.</p>
+      <ul id="photoList" class="photo-list"></ul>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = 'photoUploadGallery_v1';
+    const input = document.getElementById('photoInput');
+    const dropzone = document.getElementById('dropzone');
+    const photoList = document.getElementById('photoList');
+    const emptyText = document.getElementById('emptyText');
+    const clearAllBtn = document.getElementById('clearAll');
+
+    function formatSize(bytes) {
+      const units = ['B', 'KB', 'MB', 'GB'];
+      let size = bytes;
+      let i = 0;
+      while (size >= 1024 && i < units.length - 1) {
+        size /= 1024;
+        i += 1;
+      }
+      return `${size.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+    }
+
+    function readStorage() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function writeStorage(items) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    }
+
+    function renderList() {
+      const items = readStorage();
+      photoList.innerHTML = '';
+      if (items.length === 0) {
+        emptyText.style.display = 'block';
+        return;
+      }
+
+      emptyText.style.display = 'none';
+      items.forEach((item, index) => {
+        const li = document.createElement('li');
+        li.className = 'item';
+
+        const img = document.createElement('img');
+        img.src = item.dataUrl;
+        img.alt = item.name || `업로드 이미지 ${index + 1}`;
+
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.innerHTML = `<span>${item.name}</span><span>${formatSize(item.size)} · ${item.createdAt}</span>`;
+
+        li.appendChild(img);
+        li.appendChild(meta);
+        photoList.appendChild(li);
+      });
+    }
+
+    function toDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = () => reject(new Error('파일 읽기 실패'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function saveFiles(fileList) {
+      const files = Array.from(fileList);
+      if (files.length === 0) return;
+
+      const images = files.filter((file) => file.type.startsWith('image/'));
+      if (images.length !== files.length) {
+        alert('이미지 파일만 저장할 수 있어요.');
+      }
+      if (images.length === 0) return;
+
+      const existing = readStorage();
+      for (const file of images) {
+        const dataUrl = await toDataUrl(file);
+        existing.unshift({
+          name: file.name,
+          size: file.size,
+          createdAt: new Date().toLocaleString('ko-KR'),
+          dataUrl,
+        });
+      }
+
+      writeStorage(existing);
+      renderList();
+    }
+
+    input.addEventListener('change', (e) => {
+      saveFiles(e.target.files);
+      e.target.value = '';
+    });
+
+    ['dragenter', 'dragover'].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+      });
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      saveFiles(e.dataTransfer.files);
+    });
+
+    clearAllBtn.addEventListener('click', () => {
+      if (!confirm('저장된 사진을 모두 삭제할까요?')) return;
+      writeStorage([]);
+      renderList();
+    });
+
+    renderList();
+  </script>
+</body>
+</html>
